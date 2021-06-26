@@ -1,4 +1,4 @@
-package fft_battleground.tournament;
+package fft_battleground.service;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -26,9 +26,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.util.concurrent.RateLimiter;
 
 import fft_battleground.exception.TournamentApiException;
-import fft_battleground.tournament.model.Tournament;
-import fft_battleground.tournament.model.TournamentInfo;
-
+import fft_battleground.service.tournament.model.Tournament;
+import fft_battleground.service.tournament.model.TournamentInfo;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

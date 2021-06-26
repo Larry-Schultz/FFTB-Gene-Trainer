@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello WebSocket</title>
+<link href="/webjars/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+<!--<link href="/main.css" rel="stylesheet"> -->
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"
+	integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+	crossorigin="anonymous"></script>
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"
+	integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU="
+	crossorigin="anonymous"></script>
+<script src="/webjars/sockjs-client/sockjs.min.js"></script>
+<script src="/webjars/stomp-websocket/stomp.min.js"></script>
+<script src="/app.js"></script>
+<script src="js/tag-it.js" type="text/javascript" charset="utf-8"></script>
+<link href="css/jquery.tagit.css" rel="stylesheet" type="text/css">
+<style>
+span {
+	color: red;
+}
+</style>
+</head>
+<body>
+	<noscript>
+		<h2 style="color: #ff0000">Seems your browser doesn't support
+			Javascript! Websocket relies on Javascript being enabled. Please
+			enable Javascript and reload this page!</h2>
+	</noscript>
+	<div id="main-content" class="container">
+		<div class="row">
+			<div class="col-md-6">
+				<form class="form-inline">
+					<div class="form-group">
+						<label for="connect">WebSocket connection:</label>
+						<button id="connect" class="btn btn-default" type="submit">Connect</button>
+						<button id="disconnect" class="btn btn-default" type="submit"
+							disabled="disabled">Disconnect</button>
+					</div>
+				</form>
+			</div>
+		</div>
+		<div class="col-md-6">
+			<form class="form-inline">
+				<div class="form-group">
+					<label for="addChannelTextbox">Start</label>
+				</div>
+				<button id="startButton" class="btn btn-default" type="submit">Send</button>
+				<p id="startText"></p>
+			</form>
+		</div>
+		<br /> <br />
+		<div class="col-xl 12">
+			<p id="runDataLine">
+				<b>Tournaments </b><span id="tournaments"></span>
+				<b>Population </b><span id="population"></span>
+				<b>Thread </b><span id="threads"></span>
+				<b>Max Gene Level </b><span id="maxGeneLevel"></span>
+				<b>Min Gene Level </b><span id="minGeneLevel"></span>
+				<b>Percentage Threshold </b><span id="threshold"></span><span id="thresholdPercentageSign">%</span>
+			</p>
+			<p id="statsLine">
+				<b>CPU Usage:</b> <span id="cpuUsageText"></span> <b>Ram Usage:</b>
+				<span id="ramUsageText"></span> <b>Generation:</b> <span
+					id="chainCountText"></span>
+			</p>
+			<p id="scoreLine">
+				<b>Score: </b><span id="score"></span> <b> Correct Matches: </b> <span
+					id="correctMatches"></span> <b> Matches: </b><span id="matchCount"></span>
+				<b> Percentage</b> <span id="percentage"></span><span id="percentageSign">%</span>
+			</p>
+			<p id="geneLine">
+				<b>Max Level: </b><span id="maxLevel"></span>
+				<b> Max Level Genes: </b><span id="maxLevelGeneCount"></span>
+				<b> Min Level: </b><span id="minLevel"></span>
+				<b> Min Level Genes: </b><span id="minLevelGeneCount"></span>
+				<b> Total Genes: </b><span id="totalGenes"></span>
+				<b> Time: </b><span id="highScoreTime"></span>
+			</p>
+		</div>
+		<div class="row">
+			<div class="col-xl-12">
+				<ul id="greetings">
+
+				</ul>
+			</div>
+		</div>
+	</div>
+</body>
+</html>

@@ -1,4 +1,4 @@
-package fft_battleground.tournament;
+package fft_battleground.service;
 
 import java.io.BufferedReader;
 import java.io.IOException;

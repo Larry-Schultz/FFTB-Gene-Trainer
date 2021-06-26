@@ -4,14 +4,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.IntStream;
 
 import fft_battleground.gene.model.BotGenome;
+import fft_battleground.gene.model.EvaluatorResult;
 import fft_battleground.gene.model.Match;
+import fft_battleground.gene.model.MatchResult;
 import fft_battleground.model.BattleGroundTeam;
-import fft_battleground.tournament.model.Tournament;
+import fft_battleground.service.tournament.model.Tournament;
 import io.jenetics.Genotype;
 import io.jenetics.IntegerGene;
 import lombok.Data;
@@ -35,26 +38,33 @@ public class GeneEvaluator {
 	}
 	
 	public int scoreBot(Genotype<IntegerGene> genotype, int[] genomeIntegers, BotGenome genome) {
-		final AtomicInteger score = new AtomicInteger(0);
-		short[] botWinners = this.generateBotWinnerList(genotype, genomeIntegers, genome);
-		if(botWinners.length != this.matchManager.size()) {
-			log.error("winner list size mismatch with botWinners at {}, grandWinnersList at {} and there are {} matches", 
-					botWinners.length, this.matchManager.size(), this.matchManager.getMatchList().size());
-		} else {
-			IntStream.range(0,botWinners.length)
-			.forEach(i -> {
-				short currentGrandWinner = this.matchManager.getGrandWinnerCodeArray()[i];
-				short currentBotWinner = botWinners[i];
-				if(currentGrandWinner == currentBotWinner) {
-					score.getAndIncrement();
-				}
-			});
-		}
+		final AtomicLong score = new AtomicLong(0);
+		final AtomicInteger correctMatches = new AtomicInteger(0);
+		//MatchResult[] botWinners = this.generateBotWinnerList(genotype, genomeIntegers, genome);
+		
+		IntStream.range(0, this.matchManager.size())
+		.forEach(i -> {
+			Match currentMatch = this.matchManager.getMatchList().get(i);
+			MatchResult matchResult = this.projectAWinnerForMatch(genotype, genomeIntegers, genome, currentMatch, i);
+			short currentGrandWinner = this.matchManager.getGrandWinnerCodeArray()[i];
+			short currentBotWinner = matchResult.winnerTeamCode();
+			if(currentBotWinner == currentGrandWinner) {
+				long scoreAlteration = matchResult.getWinneringScore();
+				score.addAndGet(scoreAlteration);
+				correctMatches.getAndIncrement();
+			} else {
+				long scoreAlteration = (long) (GeneService.NEGATIVE_SCORE_MULTIPLIER * matchResult.getLosingScore());
+				score.addAndGet(scoreAlteration);
+			}
+		});
 
-		if(score.get() > this.highestResult.get()) {
-			this.timer.schedule(new WinnerFileUpdateTimerTask(score.get(), highestResult, genotype, genome, matchManager, winnerFileLock), 0);
+		if(correctMatches.get() > this.highestResult.get()) {
+			this.highestResult.set(correctMatches.get());
+			this.timer.schedule(new WinnerFileUpdateTimerTask(score.get(), correctMatches.get(), highestResult, genotype, genome, matchManager, winnerFileLock), 0);
 		}
-		return score.get();
+		
+		EvaluatorResult result = new EvaluatorResult(score.get(), correctMatches.get());
+		return (int) score.get();
 	}
 	
 	/*
@@ -65,12 +75,13 @@ public class GeneEvaluator {
 	 * this.matchManager.size(), percentage); }
 	 */
 	
-	protected short[] generateBotWinnerList(Genotype<IntegerGene> genotype, int[] genomeIntegers, BotGenome genome) {
-		short[] winnerCodes = new short[this.matchManager.size()];
+	protected MatchResult[] generateBotWinnerList(Genotype<IntegerGene> genotype, int[] genomeIntegers, BotGenome genome) {
+		MatchResult[] matchResults = new MatchResult[this.matchManager.size()];
 		for(int i = 0; i < this.matchManager.size(); i++)
 		{
 			if(this.matchManager.getProblematicIndexes().contains(i)) {
-				winnerCodes[i] = BattleGroundTeam.NONE.getTeamCode();
+				short winnerCode = BattleGroundTeam.NONE.getTeamCode();
+				matchResults[i] = new MatchResult(winnerCode, 0, 0);
 			} else {
 				Match match = this.matchManager.getMatchList().get(i);
 				Integer leftScore = this.generateTeamScore(genotype, genomeIntegers, match.getLeftTeamAbilityCodes(), match.getLeftTeamFaiths(), match.getLeftTeamBraves(), 
@@ -78,14 +89,37 @@ public class GeneEvaluator {
 				Integer rightScore = this.generateTeamScore(genotype, genomeIntegers, match.getRightTeamAbilityCodes(), match.getRightTeamFaiths(), match.getRightTeamBraves(), 
 						match.getMapNumber(), genome, BattleGroundTeam.RIGHT);
 				if(leftScore >= rightScore) {
-					winnerCodes[i] = match.getLeftTeam().getTeamCode();
+					short winnerCodes = match.getLeftTeam().getTeamCode();
+					matchResults[i] = new MatchResult(winnerCodes, leftScore, rightScore);
 				} else {
-					winnerCodes[i] = match.getRightTeam().getTeamCode();
+					short winnerCodes = match.getRightTeam().getTeamCode();
+					matchResults[i] = new MatchResult(winnerCodes, rightScore, leftScore);
 				}
 			}
 		}
 		
-		return winnerCodes;
+		return matchResults;
+	}
+	
+	protected MatchResult projectAWinnerForMatch(Genotype<IntegerGene> genotype, int[] genomeIntegers, BotGenome genome, Match match, int index) {
+		Integer leftScore = this.generateTeamScore(genotype, genomeIntegers, match.getLeftTeamAbilityCodes(), match.getLeftTeamFaiths(), match.getLeftTeamBraves(), 
+				match.getMapNumber(), genome, BattleGroundTeam.LEFT);
+		Integer rightScore = this.generateTeamScore(genotype, genomeIntegers, match.getRightTeamAbilityCodes(), match.getRightTeamFaiths(), match.getRightTeamBraves(), 
+				match.getMapNumber(), genome, BattleGroundTeam.RIGHT);
+		MatchResult result = null;
+		if(this.matchManager.getProblematicIndexes().contains(index)) {
+			short winnerCode = BattleGroundTeam.NONE.getTeamCode();
+			result = new MatchResult(winnerCode, 0, 0);
+		} else if(leftScore >= rightScore) {
+			short winnerCode = match.getLeftTeam().getTeamCode();
+			result = new MatchResult(winnerCode, leftScore, rightScore);
+		} else {
+			short winnerCode = match.getRightTeam().getTeamCode();
+			result = new MatchResult(winnerCode, rightScore, leftScore);
+		}
+		
+		return result;
+		
 	}
 	
 	protected Integer generateTeamScore(Genotype<IntegerGene> genotype, int[] genomeIntegers, int[] teamAbilityCodes, short[] faiths, short[] braves, Integer mapNumber, BotGenome genome, BattleGroundTeam side) {

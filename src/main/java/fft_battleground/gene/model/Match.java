@@ -3,7 +3,7 @@ package fft_battleground.gene.model;
 import org.apache.commons.lang3.StringUtils;
 
 import fft_battleground.model.BattleGroundTeam;
-import fft_battleground.tournament.model.Team;
+import fft_battleground.service.tournament.model.Team;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 

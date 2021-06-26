@@ -1,4 +1,4 @@
-package fft_battleground.tournament.model;
+package fft_battleground.service.tournament.model;
 
 import java.util.List;
 

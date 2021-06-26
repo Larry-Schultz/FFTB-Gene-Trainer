@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import fft_battleground.gene.GeneService;
-import fft_battleground.tournament.Tips;
+import fft_battleground.service.Tips;
 import fft_battleground.util.GenericElementOrdering;
 import fft_battleground.util.GenericPairing;
 import io.jenetics.Genotype;
@@ -105,6 +105,11 @@ public class BotGenome implements Cloneable {
 				.collect(Collectors.toList());
 		
 		return geneList;
+	}
+	
+	public int[] toIntArray() {
+		int[] array = this.elements.parallelStream().mapToInt(element -> element.getElement().getValue()).toArray();
+		return array;
 	}
 	
 	public void ensureGoodOrdering() {

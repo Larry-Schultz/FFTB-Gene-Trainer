@@ -8,23 +8,30 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import javax.annotation.PostConstruct;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fft_battleground.exception.TournamentApiException;
 import fft_battleground.gene.model.BotGenome;
-import fft_battleground.tournament.Tips;
-import fft_battleground.tournament.TournamentService;
-import fft_battleground.tournament.model.Tournament;
-import fft_battleground.tournament.model.TournamentInfo;
+import fft_battleground.gene.model.EvaluatorResult;
+import fft_battleground.service.StatisticsService;
+import fft_battleground.service.Tips;
+import fft_battleground.service.TournamentService;
+import fft_battleground.service.model.ApplicationStatistics;
+import fft_battleground.service.tournament.model.Tournament;
+import fft_battleground.service.tournament.model.TournamentInfo;
 import io.jenetics.DoubleChromosome;
 import io.jenetics.DoubleGene;
 import io.jenetics.EliteSelector;
@@ -45,6 +52,7 @@ import io.jenetics.TruncationSelector;
 import io.jenetics.UniformCrossover;
 import io.jenetics.engine.Engine;
 import io.jenetics.engine.EvolutionResult;
+import io.jenetics.engine.EvolutionStatistics;
 import io.jenetics.engine.Limits;
 import io.jenetics.util.Factory;
 import lombok.SneakyThrows;
@@ -52,9 +60,9 @@ import lombok.extern.slf4j.Slf4j;
 
 @Service
 @Slf4j
-public class GeneService {
+public class GeneService extends Thread {
 
-	public static final int NUMBER_OF_TOURNAMENTS_TO_ANALYZE = 1000;
+	public static final int NUMBER_OF_TOURNAMENTS_TO_ANALYZE = 6000;
 	
 	public static final int MAX_RANGE_OF_GENE = 100;
 	public static final int MIN_RANGE_OF_GENE = (-1) * MAX_RANGE_OF_GENE;
@@ -62,8 +70,10 @@ public class GeneService {
 	public static final int MAX_RANGE_OF_BRAVE_FAITH = 100;
 	public static final int MIN_RANGE_OF_BRAVE_FAITH = 1;
 	
-	public static final int THREAD_COUNT = 5;
-	public static final int POPULATION = 10 * 1000;
+	public static final double NEGATIVE_SCORE_MULTIPLIER = 2;
+	
+	public static final int THREAD_COUNT = 11;
+	public static final int POPULATION = 20000;
 	public static final double THRESHOLD_PERCENTAGE = 0.65;
 	public static final int WRITE_FILE_PERCENTAGE_THRESHOLD = 60;
 	
@@ -76,13 +86,18 @@ public class GeneService {
 	public static final boolean classEnabled = true;
 	public static final boolean mapsEnabled = true;
 	public static final boolean BRAVE_FAITH_ENABLED = true;
-	public static final boolean SIDE_ENABLED = true;
+	public static final boolean SIDE_ENABLED = false;
+	
+	private final Timer logTimer = new Timer();
+	
+	@Autowired
+    private SimpMessagingTemplate template;
 	
 	private BotGenome coreGenome;
 	private Tips tips;
 
-	@PostConstruct
-	public void run() throws TournamentApiException {
+	@Override
+	public void run() {
 		TournamentService tournamentService = new TournamentService();
 		try {
 			this.tips = tournamentService.getCurrentTips();
@@ -107,13 +122,13 @@ public class GeneService {
 		List<IntegerChromosome> chromosomes = this.coreGenome.toGeneList().parallelStream().map(gene -> IntegerChromosome.of(gene)).collect(Collectors.toList());
 		Factory<Genotype<IntegerGene>> gtf = Genotype.of(chromosomes);
      
-        
+		StatisticsService statService = new StatisticsService(evaluator.getMatchManager());
         
         ExecutorService executorService = Executors.newFixedThreadPool(THREAD_COUNT);
         // 3.) Create the execution environment.
         Engine<IntegerGene, Integer> engine = Engine
             .builder(gt -> this.eval(gt, evaluator), gtf)
-            .survivorsSelector(new EliteSelector<>())
+            .survivorsSelector(new TournamentSelector<>())
             .offspringSelector(new StochasticUniversalSelector<>())
             //.alterers(new UniformCrossover<>(0.2), new Mutator<>(0.15))
             .populationSize(POPULATION)
@@ -123,17 +138,13 @@ public class GeneService {
         // 4.) Start the execution (evolution) and
         //     collect the result.
         int threshold = (int) (THRESHOLD_PERCENTAGE * evaluator.getMatchManager().size());
-        Predicate<? super EvolutionResult<IntegerGene, Integer>> limit = Limits.byFitnessThreshold(threshold);
+        Predicate<? super EvolutionResult<IntegerGene, Integer>> limit = Limits.byFitnessThreshold(100);
         log.info("this run's threshold is {}", threshold);
         Genotype<IntegerGene> result = engine.stream()
         		.limit(limit)
         		.parallel()
         		.peek(evolutionResult -> {
-        			DecimalFormat df=new DecimalFormat("#.##");
-        			Runtime runtime = Runtime.getRuntime();
-        			Double currentMemoryUsage = (double) (runtime.totalMemory() - runtime.freeMemory());
-        			Double memoryUsageInGigabytes = (((currentMemoryUsage/1024.0)/1024.0)/1024.0);
-        			log.info("current generation: {}.  current memory usage: {}G", evolutionResult.generation(), df.format(memoryUsageInGigabytes));
+        			this.handleEvolutionStatistics(evolutionResult, evaluator, statService);
         		})
             .collect(EvolutionResult.toBestGenotype());
         
@@ -163,8 +174,35 @@ public class GeneService {
 	}
 	
 	private int eval(Genotype<IntegerGene> genotype, GeneEvaluator evaluator) {
-		int[] genomeIntegers = genotype.stream().mapToInt(chromosome -> chromosome.gene().intValue()).toArray();
-        int correctlyGuessedWinners = evaluator.scoreBot(genotype, genomeIntegers, this.coreGenome);
+		int correctlyGuessedWinners = Integer.MIN_VALUE;
+		try {
+			int[] genomeIntegers = genotype.stream().mapToInt(chromosome -> chromosome.gene().intValue()).toArray();
+			correctlyGuessedWinners = evaluator.scoreBot(genotype, genomeIntegers, this.coreGenome);
+		} catch(IncompatibleClassChangeError|ClassCastException error) {
+			log.error("Error reading the chromosome file", error);
+		}
         return correctlyGuessedWinners;
     }
+	
+	private void handleEvolutionStatistics(final EvolutionResult<IntegerGene, Integer> evolutionResult, final GeneEvaluator evaluator, final StatisticsService statService) {
+		TimerTask task = new TimerTask() {
+			@Override
+			public void run() {
+				reportStats(evolutionResult, evaluator, statService);
+			}
+		};
+		this.logTimer.schedule(task, 0);
+	}
+	
+	private void reportStats(EvolutionResult<IntegerGene, Integer> evolutionResult, GeneEvaluator evaluator, StatisticsService statService) {
+		DecimalFormat df=new DecimalFormat("#.##");
+		Runtime runtime = Runtime.getRuntime();
+		Double currentMemoryUsage = (double) (runtime.totalMemory() - runtime.freeMemory());
+		Double memoryUsageInGigabytes = (((currentMemoryUsage/1024.0)/1024.0)/1024.0);
+		evaluator.getMatchManager().setGeneration(evolutionResult.generation());
+		log.info("current generation: {}.  current memory usage: {}G", evolutionResult.generation(), df.format(memoryUsageInGigabytes));
+		
+		ApplicationStatistics stats = statService.getApplicationStatistics();
+		this.template.convertAndSend("/chain/stats", stats);
+	}
 }

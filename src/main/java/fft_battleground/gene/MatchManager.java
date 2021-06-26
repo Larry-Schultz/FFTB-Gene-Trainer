@@ -14,10 +14,12 @@ import org.apache.tomcat.util.buf.StringUtils;
 import fft_battleground.gene.model.BotGenome;
 import fft_battleground.gene.model.Match;
 import fft_battleground.model.BattleGroundTeam;
-import fft_battleground.tournament.model.Team;
-import fft_battleground.tournament.model.Tournament;
+import fft_battleground.service.model.HighScore;
+import fft_battleground.service.tournament.model.Team;
+import fft_battleground.service.tournament.model.Tournament;
 import fft_battleground.util.GenericPairing;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -27,6 +29,12 @@ public class MatchManager {
 	@Getter private List<Match> matchList;
 	
 	@Getter private Set<Integer> problematicIndexes;
+	
+	@Getter @Setter 
+	private HighScore highScore = null;
+	
+	@Getter @Setter
+	private Long generation = null;
 	
 	public MatchManager() {}
 	

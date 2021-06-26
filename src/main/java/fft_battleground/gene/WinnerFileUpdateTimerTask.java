@@ -2,6 +2,8 @@ package fft_battleground.gene;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.TimerTask;
@@ -19,6 +21,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 
 import fft_battleground.gene.model.BotGenome;
 import fft_battleground.gene.model.ResultData;
+import fft_battleground.service.model.HighScore;
 import io.jenetics.Chromosome;
 import io.jenetics.Genotype;
 import io.jenetics.IntegerGene;
@@ -31,7 +34,8 @@ import lombok.extern.slf4j.Slf4j;
 @NoArgsConstructor
 public class WinnerFileUpdateTimerTask extends TimerTask {
 	
-	private int score;
+	private long score;
+	private int correctMatches;
 	private AtomicInteger highestResultRef;
 	private BotGenome genomeRef;
 	private Genotype<IntegerGene> genotypeRef;
@@ -39,9 +43,10 @@ public class WinnerFileUpdateTimerTask extends TimerTask {
 	private Lock winnerFileLockRef;
 	private FailableConsumer<BotGenome, IOException> writeWinnerFileFunction;
 	
-	public WinnerFileUpdateTimerTask(int score, AtomicInteger highestResult, Genotype<IntegerGene> genotype, BotGenome genome, MatchManager matchManager, 
+	public WinnerFileUpdateTimerTask(long score, int correctMatches, AtomicInteger highestResult, Genotype<IntegerGene> genotype, BotGenome genome, MatchManager matchManager, 
 			Lock winnerFileLock) {
 		this.score = score;
+		this.correctMatches = correctMatches;
 		this.highestResultRef = highestResult;
 		this.genomeRef = genome;
 		this.genotypeRef = genotype;
@@ -51,7 +56,7 @@ public class WinnerFileUpdateTimerTask extends TimerTask {
 	
 	@Override
 	public void run() {
-		highestResultRef.set(score);
+		highestResultRef.set(this.correctMatches);
 		Function<Chromosome<IntegerGene>, Integer> chromosomeToIntegerFunction = chromosome -> chromosome.gene().allele();
 		List<Integer> winningBotGenomeIntegerList = this.genotypeRef.stream().map(chromosomeToIntegerFunction).collect(Collectors.toList());
 		Optional<Integer> maxGene = winningBotGenomeIntegerList.parallelStream().max(Integer::compare);
@@ -61,11 +66,13 @@ public class WinnerFileUpdateTimerTask extends TimerTask {
 		long countAtMaxLevel = winningBotGenomeIntegerList.parallelStream().filter(gene -> gene.equals(maxGeneValue)).count();
 		long countAtMinLevel = minGene.isPresent() ? winningBotGenomeIntegerList.parallelStream().filter(gene -> gene.equals(minGeneValue)).count() : 0; 
 		
-		int percentage = (int) (((double) score )/( (double) matchManagerRef.size()) * 100);
+		int percentage = (int) (((double) correctMatches )/( (double) matchManagerRef.size()) * 100);
+		int geneCount = winningBotGenomeIntegerList.size();
 		
-		log.info("Score for this bot is {} out of {} ({}%).  Max level {} with {} genes of this level.  Min level {} with {} genes of this level.  {} total genes", 
-				score, matchManagerRef.size(), percentage, maxGeneValue, countAtMaxLevel, minGeneValue, countAtMinLevel, 
-				winningBotGenomeIntegerList.size());
+		log.info("Score for this bot is {}. {} out of {} matches were guessed correctly ({}%).  Max level {} with {} genes of this level.  Min level {} with {} genes of this level.  {} total genes", 
+				this.score, this.correctMatches, this.matchManagerRef.size(), percentage, maxGeneValue, countAtMaxLevel, minGeneValue, countAtMinLevel, geneCount);
+		
+		this.updateHighScore(percentage, maxGeneValue, countAtMaxLevel, minGeneValue, countAtMinLevel, geneCount);
 		
 		List<String> attributeNames = this.genomeRef.getElements().stream().map(orderedElement -> orderedElement.getElement().getKey()).collect(Collectors.toList());
 		if(percentage >= GeneService.WRITE_FILE_PERCENTAGE_THRESHOLD) {
@@ -93,5 +100,14 @@ public class WinnerFileUpdateTimerTask extends TimerTask {
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.enable(SerializationFeature.INDENT_OUTPUT);
 		mapper.writeValue(file, data);
+	}
+	
+	private void updateHighScore(int percentage, int maxGeneValue, long countAtMaxLevel, int minGeneValue, long countAtMinLevel, int geneCount) {
+		SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy hh:mm:ss aa");
+		Date currentTime = new Date();
+		String dateString = sdf.format(currentTime);
+		HighScore highScore = new HighScore(this.score, percentage, this.correctMatches, this.matchManagerRef.size(), 
+				maxGeneValue, countAtMaxLevel, minGeneValue, countAtMinLevel, geneCount, dateString);
+		this.matchManagerRef.setHighScore(highScore);
 	}
 }
