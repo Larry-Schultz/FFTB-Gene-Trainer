@@ -12,7 +12,7 @@ public record MatchResult(short winnerTeamCode, int predictedWinnerScore, int pr
 		return score;
 	}
 	
-	protected int getDifference() {
+	public int getDifference() {
 		int difference = Math.abs(predictedWinnerScore - predictedLoserScore);
 		return difference;
 	}

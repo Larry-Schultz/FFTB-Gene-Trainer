@@ -93,7 +93,10 @@ function showStats(message) {
 }
 
 function start() {
-	$.getJSON('/start', function(data) {
+	const population = $('#populationTextbox').val();
+	const tournaments = $('#tournamentsTextbox').val();
+	const url = '/start?population=' + population + '&tournaments=' + tournaments;
+	$.getJSON(url, function(data) {
 		var geneStatData = data
 		$('#tournaments').text(geneStatData.tournamentsToAnalyze);
 		$('#population').text(geneStatData.population);

@@ -62,7 +62,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class GeneService extends Thread {
 
-	public static final int NUMBER_OF_TOURNAMENTS_TO_ANALYZE = 6000;
+	public static Integer NUMBER_OF_TOURNAMENTS_TO_ANALYZE = 6000;
 	
 	public static final int MAX_RANGE_OF_GENE = 100;
 	public static final int MIN_RANGE_OF_GENE = (-1) * MAX_RANGE_OF_GENE;
@@ -73,9 +73,10 @@ public class GeneService extends Thread {
 	public static final double NEGATIVE_SCORE_MULTIPLIER = 2;
 	
 	public static final int THREAD_COUNT = 11;
-	public static final int POPULATION = 20000;
+	public static Integer POPULATION = 2500;
 	public static final double THRESHOLD_PERCENTAGE = 0.65;
 	public static final int WRITE_FILE_PERCENTAGE_THRESHOLD = 60;
+	public static final int PREDICATE_SCORE_LIMIT = 2000;
 	
 	public static final boolean DO_KICKSTART = false;
 	public static final String kickstartFilename = "winner2000.txt";
@@ -99,6 +100,9 @@ public class GeneService extends Thread {
 	@Override
 	public void run() {
 		TournamentService tournamentService = new TournamentService();
+		log.info("Starting run");
+		log.info("The population is configured to be {}", GeneService.POPULATION);
+		log.info("Will analyze {} tournaments", GeneService.NUMBER_OF_TOURNAMENTS_TO_ANALYZE);
 		try {
 			this.tips = tournamentService.getCurrentTips();
 		} catch (TournamentApiException e) {
@@ -138,7 +142,7 @@ public class GeneService extends Thread {
         // 4.) Start the execution (evolution) and
         //     collect the result.
         int threshold = (int) (THRESHOLD_PERCENTAGE * evaluator.getMatchManager().size());
-        Predicate<? super EvolutionResult<IntegerGene, Integer>> limit = Limits.byFitnessThreshold(100);
+        Predicate<? super EvolutionResult<IntegerGene, Integer>> limit = Limits.byFitnessThreshold(PREDICATE_SCORE_LIMIT);
         log.info("this run's threshold is {}", threshold);
         Genotype<IntegerGene> result = engine.stream()
         		.limit(limit)

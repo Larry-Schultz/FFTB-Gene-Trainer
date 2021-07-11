@@ -1,5 +1,6 @@
 package fft_battleground.gene;
 
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Timer;
@@ -8,6 +9,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.IntStream;
+
+import com.google.common.math.Quantiles;
 
 import fft_battleground.gene.model.BotGenome;
 import fft_battleground.gene.model.EvaluatorResult;
@@ -60,11 +63,26 @@ public class GeneEvaluator {
 
 		if(correctMatches.get() > this.highestResult.get()) {
 			this.highestResult.set(correctMatches.get());
-			this.timer.schedule(new WinnerFileUpdateTimerTask(score.get(), correctMatches.get(), highestResult, genotype, genome, matchManager, winnerFileLock), 0);
+			this.timer.schedule(new WinnerFileUpdateTimerTask(score.get(), correctMatches.get(), highestResult, genotype, genome, matchManager, winnerFileLock, this), 0);
 		}
 		
 		EvaluatorResult result = new EvaluatorResult(score.get(), correctMatches.get());
 		return (int) score.get();
+	}
+	
+	public Map<Integer, Double> calculateScoreDifferencePercentiles(Genotype<IntegerGene> genotype, int[] genomeIntegers, BotGenome genome) {
+		List<Integer> scoreDifferences = new LinkedList<>();
+		MatchResult[] results = this.generateBotWinnerList(genotype, genomeIntegers, genome);
+		for(int i = 0; i < results.length; i++) {
+			int difference = results[i].getDifference();
+			scoreDifferences.add(difference);
+		}
+		
+		Map<Integer, Double> percentiles = Quantiles.percentiles()
+				.indexes(IntStream.range(1, 100).toArray())
+				.compute(scoreDifferences);
+		
+		return percentiles;
 	}
 	
 	/*

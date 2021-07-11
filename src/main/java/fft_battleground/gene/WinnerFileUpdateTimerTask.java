@@ -5,14 +5,13 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import org.apache.commons.lang3.function.FailableConsumer;
 
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -41,10 +40,10 @@ public class WinnerFileUpdateTimerTask extends TimerTask {
 	private Genotype<IntegerGene> genotypeRef;
 	private MatchManager matchManagerRef;
 	private Lock winnerFileLockRef;
-	private FailableConsumer<BotGenome, IOException> writeWinnerFileFunction;
+	private GeneEvaluator geneEvaluator;
 	
 	public WinnerFileUpdateTimerTask(long score, int correctMatches, AtomicInteger highestResult, Genotype<IntegerGene> genotype, BotGenome genome, MatchManager matchManager, 
-			Lock winnerFileLock) {
+			Lock winnerFileLock, GeneEvaluator geneEvaluator) {
 		this.score = score;
 		this.correctMatches = correctMatches;
 		this.highestResultRef = highestResult;
@@ -52,6 +51,7 @@ public class WinnerFileUpdateTimerTask extends TimerTask {
 		this.genotypeRef = genotype;
 		this.matchManagerRef = matchManager;
 		this.winnerFileLockRef = winnerFileLock;
+		this.geneEvaluator = geneEvaluator;
 	}
 	
 	@Override
@@ -89,13 +89,18 @@ public class WinnerFileUpdateTimerTask extends TimerTask {
 	}
 	
 	private void writeWinnerToFile(List<Integer> geneIntegers, List<String> attributeNames, final int percentage) throws JsonGenerationException, JsonMappingException, IOException {
-		String filename = "winner.txt";
+		String filename = "winner-" + GeneService.NUMBER_OF_TOURNAMENTS_TO_ANALYZE.toString() + ".txt";
 		File file = new File(filename);
+		
+		Map<Integer, Double> percentiles = this.calculatePercentiles(geneIntegers);
+		
+		String dateString = this.generateCurrentTimeFormattedDateString();
 		
 		ResultData data = new ResultData(geneIntegers, attributeNames, percentage, GeneService.abilityEnabled, GeneService.itemEnabled, GeneService.userSkillsEnabled,
 				GeneService.classEnabled, GeneService.mapsEnabled, GeneService.BRAVE_FAITH_ENABLED, GeneService.SIDE_ENABLED, 
 				GeneService.NUMBER_OF_TOURNAMENTS_TO_ANALYZE, GeneService.THRESHOLD_PERCENTAGE, GeneService.POPULATION, GeneService.MAX_RANGE_OF_GENE,
-				GeneService.MIN_RANGE_OF_GENE, GeneService.MAX_RANGE_OF_BRAVE_FAITH, GeneService.MIN_RANGE_OF_BRAVE_FAITH);
+				GeneService.MIN_RANGE_OF_GENE, GeneService.MAX_RANGE_OF_BRAVE_FAITH, GeneService.MIN_RANGE_OF_BRAVE_FAITH, percentiles, dateString,
+				this.score);
 		data.sortGeneticAttributesByAbsoluteValue();
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.enable(SerializationFeature.INDENT_OUTPUT);
@@ -103,11 +108,23 @@ public class WinnerFileUpdateTimerTask extends TimerTask {
 	}
 	
 	private void updateHighScore(int percentage, int maxGeneValue, long countAtMaxLevel, int minGeneValue, long countAtMinLevel, int geneCount) {
-		SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy hh:mm:ss aa");
-		Date currentTime = new Date();
-		String dateString = sdf.format(currentTime);
+		String dateString = this.generateCurrentTimeFormattedDateString();
 		HighScore highScore = new HighScore(this.score, percentage, this.correctMatches, this.matchManagerRef.size(), 
 				maxGeneValue, countAtMaxLevel, minGeneValue, countAtMinLevel, geneCount, dateString);
 		this.matchManagerRef.setHighScore(highScore);
+	}
+	
+	private Map<Integer, Double> calculatePercentiles(List<Integer> geneIntegers) {
+		int[] genes = geneIntegers.stream().mapToInt(gene -> gene.intValue()).toArray();
+		Map<Integer, Double> percentiles = this.geneEvaluator.calculateScoreDifferencePercentiles(this.genotypeRef, genes, this.genomeRef);
+		return percentiles;
+	}
+	
+	private String generateCurrentTimeFormattedDateString() {
+		SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy hh:mm:ss aa");
+		Date currentTime = new Date();
+		String dateString = sdf.format(currentTime);
+		
+		return dateString;
 	}
 }

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 import fft_battleground.util.GenericPairing;
 import lombok.Data;
@@ -25,14 +26,17 @@ public class ResultData {
 	private int minGene;
 	private int maxBraveFaithGene;
 	private int minBraveFaithGene;
+	private String creationDateString;
+	private long score;
 	private List<GenericPairing<String, Integer>> geneticAttributes;
+	private List<GenericPairing<Integer, Double>> percentiles;
 	
 	public ResultData() {}
 	
 	public ResultData(List<Integer> geneAttributes, List<String> attributeNames, int currentResultSuccessPercentage, boolean ABILITY_ENABLED, boolean ITEM_ENABLED,
 	boolean USER_SKILLS_ENABLED, boolean CLASS_ENABLED, boolean MAPS_ENABLED, boolean BRAVE_FAITH_ENABLED,
 	boolean SIDE_ENABLED, int numberOfAnalyzedTournaments, double threshold, int population, int maxGene, int minGene, 
-	int maxBraveFaithGene, int minBraveFaithGene) {
+	int maxBraveFaithGene, int minBraveFaithGene, Map<Integer, Double> percentiles, String creationDateString, long score) {
 		this.geneticAttributes = new ArrayList<>();
 		for(int i = 0; i < geneAttributes.size() && i < attributeNames.size(); i++) {
 			GenericPairing<String, Integer> genericPairing = new GenericPairing<>(attributeNames.get(i), geneAttributes.get(i));
@@ -54,6 +58,10 @@ public class ResultData {
 		this.minGene = minGene;
 		this.maxBraveFaithGene = maxBraveFaithGene;
 		this.minBraveFaithGene = minBraveFaithGene;
+		this.creationDateString = creationDateString;
+		this.score = score;
+		
+		this.percentiles = GenericPairing.convertMapToGenericPairList(percentiles);
 	}
 	
 	public void sortGeneticAttributesByAbsoluteValue() {
