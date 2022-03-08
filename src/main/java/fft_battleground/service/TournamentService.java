@@ -97,6 +97,7 @@ public class TournamentService {
 		} else {
 			tournament = this.getTournamentFromApiById(id);
 			this.writeTournamentCacheFileForId(id, tournament);
+			log.info("Loading tournament {} from api", id);
 		}
 		
 		return tournament;

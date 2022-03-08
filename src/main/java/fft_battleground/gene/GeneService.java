@@ -63,6 +63,7 @@ import lombok.extern.slf4j.Slf4j;
 public class GeneService extends Thread {
 
 	public static Integer NUMBER_OF_TOURNAMENTS_TO_ANALYZE = 6000;
+	public static TrackedMetric metric = TrackedMetric.SCORE;
 	
 	public static final int MAX_RANGE_OF_GENE = 100;
 	public static final int MIN_RANGE_OF_GENE = (-1) * MAX_RANGE_OF_GENE;
@@ -70,7 +71,7 @@ public class GeneService extends Thread {
 	public static final int MAX_RANGE_OF_BRAVE_FAITH = 100;
 	public static final int MIN_RANGE_OF_BRAVE_FAITH = 1;
 	
-	public static final double NEGATIVE_SCORE_MULTIPLIER = 2;
+	public static final double NEGATIVE_SCORE_MULTIPLIER = 5;
 	
 	public static final int THREAD_COUNT = 11;
 	public static Integer POPULATION = 2500;
@@ -142,10 +143,11 @@ public class GeneService extends Thread {
         // 4.) Start the execution (evolution) and
         //     collect the result.
         int threshold = (int) (THRESHOLD_PERCENTAGE * evaluator.getMatchManager().size());
-        Predicate<? super EvolutionResult<IntegerGene, Integer>> limit = Limits.byFitnessThreshold(PREDICATE_SCORE_LIMIT);
+        //Predicate<? super EvolutionResult<IntegerGene, Integer>> winsLimit = evolutionResult -> evaluator.getHighestResult().get() < threshold;
+        Predicate<? super EvolutionResult<IntegerGene, Integer>> winsLimit = Limits.infinite();
         log.info("this run's threshold is {}", threshold);
         Genotype<IntegerGene> result = engine.stream()
-        		.limit(limit)
+        		.limit(winsLimit)
         		.parallel()
         		.peek(evolutionResult -> {
         			this.handleEvolutionStatistics(evolutionResult, evaluator, statService);
@@ -178,14 +180,20 @@ public class GeneService extends Thread {
 	}
 	
 	private int eval(Genotype<IntegerGene> genotype, GeneEvaluator evaluator) {
-		int correctlyGuessedWinners = Integer.MIN_VALUE;
+		int scoreMetric = Integer.MIN_VALUE;
 		try {
 			int[] genomeIntegers = genotype.stream().mapToInt(chromosome -> chromosome.gene().intValue()).toArray();
-			correctlyGuessedWinners = evaluator.scoreBot(genotype, genomeIntegers, this.coreGenome);
+			EvaluatorResult result = evaluator.scoreBot(genotype, genomeIntegers, this.coreGenome);
+			if(GeneService.metric == TrackedMetric.WINS) {
+				scoreMetric = result.winners();
+			} else if(GeneService.metric == TrackedMetric.SCORE) {
+				scoreMetric = (int) result.score();
+			}
+			
 		} catch(IncompatibleClassChangeError|ClassCastException error) {
 			log.error("Error reading the chromosome file", error);
 		}
-        return correctlyGuessedWinners;
+        return scoreMetric;
     }
 	
 	private void handleEvolutionStatistics(final EvolutionResult<IntegerGene, Integer> evolutionResult, final GeneEvaluator evaluator, final StatisticsService statService) {
@@ -209,4 +217,9 @@ public class GeneService extends Thread {
 		ApplicationStatistics stats = statService.getApplicationStatistics();
 		this.template.convertAndSend("/chain/stats", stats);
 	}
+}
+
+enum TrackedMetric {
+	WINS,
+	SCORE;
 }

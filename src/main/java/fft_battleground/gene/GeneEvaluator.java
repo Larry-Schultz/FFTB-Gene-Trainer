@@ -40,7 +40,7 @@ public class GeneEvaluator {
 		this.matchManager = new MatchManager(tournaments, genome);
 	}
 	
-	public int scoreBot(Genotype<IntegerGene> genotype, int[] genomeIntegers, BotGenome genome) {
+	public EvaluatorResult scoreBot(Genotype<IntegerGene> genotype, int[] genomeIntegers, BotGenome genome) {
 		final AtomicLong score = new AtomicLong(0);
 		final AtomicInteger correctMatches = new AtomicInteger(0);
 		//MatchResult[] botWinners = this.generateBotWinnerList(genotype, genomeIntegers, genome);
@@ -67,7 +67,7 @@ public class GeneEvaluator {
 		}
 		
 		EvaluatorResult result = new EvaluatorResult(score.get(), correctMatches.get());
-		return (int) score.get();
+		return result;
 	}
 	
 	public Map<Integer, Double> calculateScoreDifferencePercentiles(Genotype<IntegerGene> genotype, int[] genomeIntegers, BotGenome genome) {
